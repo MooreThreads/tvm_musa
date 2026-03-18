@@ -716,7 +716,7 @@ class ThreadAllreduceBuilder final : public StmtExprMutator {
   // Also, the warp/wavefront size differs (64 on rocm, 32 on cuda and metal).
   bool IsWarpReduction(const std::vector<DataType>& types, int group_extent, int reduce_extent,
                        int contiguous_reduce_extent) {
-    if ((target_->kind->name != "cuda") && (target_->kind->name != "rocm") &&
+    if ((target_->kind->name != "cuda") && (target_->kind->name != "musa") && (target_->kind->name != "rocm") &&
         (target_->kind->name != "metal")) {
       return false;
     }

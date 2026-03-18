@@ -141,6 +141,19 @@ TVM_REGISTER_TARGET_TAG("nvidia/jetson-agx-orin-64gb")
                                                   {"mtriple", ffi::String("aarch64-linux-gnu")},
                                                   {"mcpu", ffi::String("cortex-a78")},
                                                   {"num-cores", 12}}}});
+
+TVM_REGISTER_TARGET_TAG("mthreads/m1000")
+.set_config({{"kind", ffi::String("musa")},
+              {"arch", ffi::String("mp_22")},
+              {"max_shared_memory_per_block", 73728},
+              {"max_threads_per_block", 1024},
+              {"thread_warp_size", 128},
+              {"registers_per_block", 262144},
+              {"host",
+              ffi::Map<ffi::String, ffi::Any>{{"kind", ffi::String("llvm")},
+                                              {"mtriple", ffi::String("aarch64-linux-gnu")},
+                                              {"mcpu", ffi::String("cortex-a78")},
+                                              {"num-cores", 12}}}});
 #endif  // TVM_LLVM_VERSION >= 110
 #endif  // TVM_LLVM_HAS_AARCH64_TARGET
 
@@ -425,6 +438,20 @@ TVM_REGISTER_CUDA_TAG("nvidia/jetson-tx1", "sm_53", 49152, 32768);
 TVM_REGISTER_CUDA_TAG("nvidia/tegra-x1", "sm_53", 49152, 32768);
 
 #undef TVM_REGISTER_CUDA_TAG
+
+#define TVM_REGISTER_MUSA_TAG(Name, Arch, SharedMem, RegPerBlock) \
+  TVM_REGISTER_TARGET_TAG(Name).set_config({                      \
+      {"kind", ffi::String("musa")},                              \
+      {"keys", ffi::Array<ffi::String>{"musa", "gpu"}},           \
+      {"arch", ffi::String(Arch)},                                \
+      {"max_shared_memory_per_block", SharedMem},                 \
+      {"max_threads_per_block", 1024},                            \
+      {"thread_warp_size", 32},                                   \
+      {"registers_per_block", RegPerBlock},                       \
+  })
+
+#undef TVM_REGISTER_MUSA_TAG
+
 
 #define TVM_REGISTER_TAG_AWS_C5(Name, Cores, Arch)                                           \
   TVM_REGISTER_TARGET_TAG(Name).set_config({{"kind", ffi::String("llvm")},                   \

@@ -19,7 +19,7 @@ import json
 import pytest
 import tvm
 import tvm.testing
-from tvm.target import Target, arm_cpu, bifrost, cuda, intel_graphics, mali, rocm
+from tvm.target import Target, arm_cpu, bifrost, cuda, intel_graphics, mali, rocm, musa
 
 
 def test_all_targets_device_type_verify():
@@ -156,6 +156,20 @@ def test_target_tag_1():
     assert tgt.attrs["max_threads_per_block"] == 1024
     assert tgt.attrs["thread_warp_size"] == 32
     assert tgt.attrs["registers_per_block"] == 32768
+
+
+def test_target_tag_2():
+    tgt = tvm.target.Target("mthreads/m1000")
+    assert tgt.kind.name == "musa"
+    assert tgt.attrs["arch"] == "mp_22"
+    assert tgt.attrs["max_shared_memory_per_block"] == 73728
+    assert tgt.attrs["max_threads_per_block"] == 1024
+    assert tgt.attrs["thread_warp_size"] == 128
+    assert tgt.attrs["registers_per_block"] == 262144
+    assert tgt.host.kind.name == "llvm"
+    assert tgt.host.attrs["mtriple"] == "aarch64-linux-gnu"
+    assert tgt.host.attrs["mcpu"] == "cortex-a78"
+    assert tgt.host.attrs["num-cores"] == 12
 
 
 def test_list_kinds():
@@ -422,6 +436,19 @@ def test_target_from_device_cuda(input_device):
     assert target.max_shared_memory_per_block == dev.max_shared_memory_per_block
     assert target.thread_warp_size == dev.warp_size
     assert target.arch == "sm_" + dev.compute_version.replace(".", "")
+
+
+@tvm.testing.requires_musa
+@pytest.mark.parametrize("input_device", ["musa", tvm.musa()])
+def test_target_from_device_musa(input_device):
+    target = Target.from_device(input_device)
+
+    dev = tvm.musa()
+    assert target.kind.name == "musa"
+    assert target.attrs["max_threads_per_block"] == dev.max_threads_per_block
+    assert target.max_shared_memory_per_block == dev.max_shared_memory_per_block
+    assert target.thread_warp_size == dev.warp_size
+    assert target.arch == "mp_" + dev.compute_version.replace(".", "")
 
 
 @tvm.testing.requires_rocm

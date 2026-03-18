@@ -31,7 +31,7 @@ from .profiling import Report
 from .executable import Executable
 
 # function exposures
-from ._tensor import device, cpu, cuda, opencl, vulkan, metal
+from ._tensor import device, cpu, cuda, musa, opencl, vulkan, metal
 from ._tensor import vpi, rocm, ext_dev, from_dlpack
 from .module import load_module, enabled, system_lib, load_static_library, num_threads
 from .container import String, ShapeTuple

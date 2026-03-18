@@ -42,6 +42,10 @@
 #define TVM_INFO_USE_CUDA "NOT-FOUND"
 #endif
 
+#ifndef TVM_INFO_USE_MUSA
+#define TVM_INFO_USE_MUSA "NOT-FOUND"
+#endif
+
 #ifndef TVM_INFO_USE_NVTX
 #define TVM_INFO_USE_NVTX "NOT-FOUND"
 #endif
@@ -298,6 +302,7 @@ TVM_DLL ffi::Map<ffi::String, ffi::String> GetLibInfo() {
       {"USE_CPP_RTVM", TVM_INFO_USE_CPP_RTVM},
       {"USE_CUBLAS", TVM_INFO_USE_CUBLAS},
       {"USE_CUDA", TVM_INFO_USE_CUDA},
+      {"USE_MUSA", TVM_INFO_USE_MUSA},
       {"USE_NVTX", TVM_INFO_USE_NVTX},
       {"USE_NCCL", TVM_INFO_USE_NCCL},
       {"USE_MSCCL", TVM_INFO_USE_MSCCL},

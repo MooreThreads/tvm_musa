@@ -63,6 +63,7 @@ class Target(Object):
 
     - :py:func:`tvm.target.arm_cpu` create arm_cpu target
     - :py:func:`tvm.target.cuda` create CUDA target
+    - :py:func:`tvm.target.musa` create MUSA target
     - :py:func:`tvm.target.rocm` create ROCM target
     - :py:func:`tvm.target.mali` create Mali target
     - :py:func:`tvm.target.intel_graphics` create Intel Graphics target
@@ -159,7 +160,7 @@ class Target(Object):
         ----------
         dev : Union[str, Device]
             The device to detect the target for.
-            Supported device types: ["cuda", "metal", "rocm", "vulkan", "opencl", "cpu"]
+            Supported device types: ["cuda", "musa", "metal", "rocm", "vulkan", "opencl", "cpu"]
 
         Returns
         -------
@@ -189,7 +190,7 @@ class Target(Object):
 
     @property
     def arch(self):
-        """Returns the cuda arch from the target if it exists."""
+        """Returns the GPU arch (e.g. cuda/musa) from the target if it exists."""
         return str(self.attrs.get("arch", ""))
 
     @property
@@ -445,6 +446,26 @@ def cuda(model="unknown", arch=None, options=None):
     if not any(["-arch" in opt for opt in opts]):
         warnings.warn("Try specifying cuda arch by adding 'arch=sm_xx' to your target.")
     return Target(" ".join(["cuda"] + opts))
+
+
+def musa(model="unknown", arch=None, options=None):
+    """Returns a MUSA target.
+
+    Parameters
+    ----------
+    model: str
+        The model of musa device.
+    arch: str
+        The musa architecture (e.g. mp_22)
+    options : str or list of str
+        Additional options
+    """
+    opts = _merge_opts(["-model=%s" % model], options)
+    if arch:
+        opts = _merge_opts(["-arch=%s" % arch], opts)
+    if not any(["-arch" in opt for opt in opts]):
+        warnings.warn("Try specifying musa arch by adding 'arch=mp_xx' to your target.")
+    return Target(" ".join(["musa"] + opts))
 
 
 def rocm(model="unknown", options=None):

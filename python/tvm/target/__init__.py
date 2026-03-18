@@ -61,6 +61,7 @@ We can also use other specific function in this module to create specific target
 from .target import Target, create, TargetKind
 from .target import (
     cuda,
+    musa,
     rocm,
     mali,
     intel_graphics,

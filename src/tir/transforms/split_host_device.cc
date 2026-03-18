@@ -77,7 +77,7 @@ class HostDeviceSplitter : public StmtMutator {
 
     bool can_propagate_errors = [&]() {
       auto kind = device_target->GetTargetDeviceType();
-      return kind == kDLCPU || kind == kDLExtDev || kind == kDLHexagon;
+      return kind == kDLCPU || kind == kDLHexagon;
     }();
     IntImm success(DataType::Int(32), 0);
     Type kernel_ret_type;

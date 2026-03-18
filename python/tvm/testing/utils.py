@@ -451,6 +451,7 @@ def _get_targets(target_names=None):
 DEFAULT_TEST_TARGETS = [
     "llvm",
     "cuda",
+    "musa",
     "nvptx",
     "vulkan -from_device=0",
     "opencl",
@@ -821,6 +822,7 @@ class Feature:
 def _any_gpu_exists():
     return (
         tvm.cuda().exist
+        or tvm.musa().exist
         or tvm.rocm().exist
         or tvm.opencl().exist
         or tvm.metal().exist
@@ -831,6 +833,7 @@ def _any_gpu_exists():
 def _multi_gpu_exists():
     return (
         (tvm.cuda(0).exist and tvm.cuda(1).exist)
+        or (tvm.musa(0).exist and tvm.musa(1).exist)
         or (tvm.rocm(0).exist and tvm.rocm(1).exist)
         or (tvm.opencl(0).exist and tvm.opencl(1).exist)
         or (tvm.metal(0).exist and tvm.metal(1).exist)
@@ -880,6 +883,16 @@ requires_cuda = Feature(
     cmake_flag="USE_CUDA",
     target_kind_enabled="cuda",
     target_kind_hardware="cuda",
+    parent_features="gpu",
+)
+
+# Mark a test as requiring the MUSA runtime.
+requires_musa = Feature(
+    "musa",
+    "MUSA",
+    cmake_flag="USE_MUSA",
+    target_kind_enabled="musa",
+    target_kind_hardware="musa",
     parent_features="gpu",
 )
 
