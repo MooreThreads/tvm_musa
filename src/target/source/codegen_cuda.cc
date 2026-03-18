@@ -270,7 +270,7 @@ std::string CodeGenCUDA::Finish() {
     decl_stream << "struct fp4_e2x16_t {\n fp4_e2_t data[16]; \n};\n";
     decl_stream << "#endif\n\n";
   }
-  declare_vector_type_extensions(decl_stream, enable_fp16_, enable_bf16_, enable_fp8_, enable_fp4_);
+  cuda_declare_vector_type_extensions(decl_stream, enable_fp16_, enable_bf16_, enable_fp8_, enable_fp4_);
 
   if (enable_warp_shuffle_) {
     decl_stream << _cuda_warp_intrinsic_util;
@@ -1720,15 +1720,6 @@ void CodeGenCUDA::PrintWmmaScope(const std::string& scope, DataType t, const Var
     need_mma_h_ = true;
     os << "nvcuda::wmma::fragment<nvcuda::wmma::accumulator, " << shape_str << ", " << type.str()
        << ">";
-  }
-}
-
-int stoi(const std::string& str) {
-  try {
-    return std::stoi(str);
-  } catch (std::invalid_argument& e) {
-    LOG(FATAL) << "Cannot convert \"" << str << "\" to int";
-    throw;
   }
 }
 

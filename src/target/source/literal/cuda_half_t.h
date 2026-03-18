@@ -387,7 +387,7 @@ static constexpr const char* _cuda_warp_intrinsic_util = R"(
 
 )";
 
-void declare_vector_type_extensions(std::ostringstream& stream, bool enable_fp16, bool enable_bf16,
+void cuda_declare_vector_type_extensions(std::ostringstream& stream, bool enable_fp16, bool enable_bf16,
                                     bool enable_fp8, bool enable_fp4) {
   if (enable_fp16 || enable_bf16) {
     stream << R"(
