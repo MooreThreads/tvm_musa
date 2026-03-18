@@ -27,6 +27,7 @@ endif()
 # and add set(OPTION VALUE) to override these build options.
 # Alernatively, use cmake -DOPTION=VALUE through command-line.
 tvm_option(USE_CUDA "Build with CUDA" OFF)
+tvm_option(USE_MUSA "Build with MUSA" OFF)
 tvm_option(USE_NCCL "Build with NCCL" OFF)
 tvm_option(USE_OPENCL "Build with OpenCL" OFF)
 tvm_option(USE_OPENCL_ENABLE_HOST_PTR "Enable OpenCL memory object access to host" OFF)
@@ -448,6 +449,7 @@ set(CMAKE_CUDA_STANDARD 17)
 
 # Module rules
 include(cmake/modules/CUDA.cmake)
+include(cmake/modules/MUSA.cmake)
 include(cmake/modules/Hexagon.cmake) # This must come before logging.cmake
 include(cmake/modules/contrib/CLML.cmake) # Must be before OpenCL.cmake
 include(cmake/modules/OpenCL.cmake)
