@@ -205,6 +205,7 @@ from tvm.runtime import ObjectConvertible
 from tvm.runtime._tensor import (
     cpu,
     cuda,
+    musa,
     device,
     ext_dev,
     hexagon,
@@ -843,6 +844,7 @@ __all__ = [
     "cosh",
     "cpu",
     "cuda",
+    "musa",
     "cumprod",
     "cumsum",
     "dataflow",

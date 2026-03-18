@@ -166,7 +166,7 @@ class Target(Object):
         ----------
         dev : Union[str, Device]
             The device to detect the target for.
-            Supported device types: ["cuda", "metal", "rocm", "vulkan", "opencl", "cpu"]
+            Supported device types: ["cuda", "musa", "metal", "rocm", "vulkan", "opencl", "cpu"]
 
         Returns
         -------
@@ -197,6 +197,61 @@ class Target(Object):
     @property
     def features(self):
         return TargetFeatures(self)
+
+    @property
+    def arch(self):
+        """Returns the GPU arch from the target if it exists."""
+        return str(self.attrs.get("arch", ""))
+
+    @property
+    def max_num_threads(self):
+        """Returns the max_num_threads from the target if it exists."""
+        return int(self.attrs["max_num_threads"])
+
+    @property
+    def max_block_size_x(self):
+        """Returns the max block size in x-dimension from the target if it exists."""
+        return int(self.attrs["max_block_size_x"])
+
+    @property
+    def max_block_size_y(self):
+        """Returns the max block size in y-dimension from the target if it exists."""
+        return int(self.attrs["max_block_size_y"])
+
+    @property
+    def thread_warp_size(self):
+        """Returns the thread_warp_size from the target if it exists."""
+        return int(self.attrs["thread_warp_size"])
+
+    @property
+    def max_shared_memory_per_block(self):
+        return int(self.attrs["max_shared_memory_per_block"])
+
+    @property
+    def max_function_args(self):
+        return int(self.attrs.get("max_function_args", 0))
+
+    @property
+    def vtcm_capacity(self):
+        return int(self.attrs.get("vtcm-capacity", 0))
+
+    @property
+    def device_name(self):
+        return str(self.attrs.get("device", ""))
+
+    @property
+    def model(self):
+        """Returns model from the target if it exists."""
+        return str(self.attrs.get("model", "unknown"))
+
+    @property
+    def mcpu(self):
+        """Returns the mcpu from the target if it exists."""
+        return str(self.attrs.get("mcpu", ""))
+
+    @property
+    def mattr(self):
+        return self.attrs.get("mattr", "")
 
     def get_kind_attr(self, attr_name):
         """Get additional attribute about the target kind.
@@ -230,3 +285,15 @@ class Target(Object):
         if target is None:
             raise ValueError("Target is not set in env or passed as argument.")
         return target
+
+
+def musa(model="unknown", arch=None, options=None):
+    """Returns a MUSA target."""
+    config = {"kind": "musa", "model": model}
+    if arch:
+        config["arch"] = arch
+    if isinstance(options, dict):
+        config.update(options)
+    elif options:
+        raise ValueError("MUSA target options must be provided as a config dictionary")
+    return Target(config)

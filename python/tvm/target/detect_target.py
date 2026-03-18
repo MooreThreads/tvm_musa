@@ -44,6 +44,17 @@ def _detect_cuda(dev: Device) -> Target:
         }
     )
 
+def _detect_musa(dev: Device) -> Target:
+    return Target(
+        {
+            "kind": "musa",
+            "max_shared_memory_per_block": dev.max_shared_memory_per_block,
+            "max_threads_per_block": dev.max_threads_per_block,
+            "thread_warp_size": dev.warp_size,
+            "arch": "mp_" + dev.compute_version.replace(".", ""),
+        }
+    )
+
 
 def _detect_rocm(dev: Device) -> Target:
     return Target(
@@ -144,4 +155,5 @@ SUPPORT_DEVICE = {
     "vulkan": _detect_vulkan,
     "rocm": _detect_rocm,
     "opencl": _detect_opencl,
+    "musa": _detect_musa,
 }

@@ -187,6 +187,33 @@ ffi::Map<ffi::String, ffi::Any> UpdateCUDAAttrs(ffi::Map<ffi::String, ffi::Any> 
 }
 
 /*!
+ * \brief Update the attributes in the MUSA target.
+ * \param target The Target to update
+ * \return The updated attributes
+ */
+ffi::Map<ffi::String, ffi::Any> UpdateMUSAAttrs(ffi::Map<ffi::String, ffi::Any> target) {
+  if (target.count("arch")) {
+    ffi::String archStr = Downcast<ffi::String>(target.at("arch"));
+    TVM_FFI_CHECK(support::StartsWith(archStr, "mp_"), ValueError)
+        << "MUSA target gets an invalid arch: -arch=" << archStr;
+  } else {
+    int archInt;
+    ffi::Any version;
+    if (!DetectDeviceFlag({kDLExtDev, 0}, runtime::kComputeVersion, &version)) {
+      LOG(WARNING) << "Unable to detect MUSA version, default to \"-arch=mp_22\" instead";
+      archInt = 22;
+    } else {
+      archInt = std::stod(version.cast<std::string>()) * 10 + 0.1;
+    }
+    target.Set("arch", ffi::String("mp_") + std::to_string(archInt));
+    if (archInt == 22) {
+      target.Set("thread_warp_size", 128);
+    }
+  }
+  return target;
+}
+
+/*!
  * \brief Update the attributes in the LLVM NVPTX target.
  * \param target The Target to update
  * \return The updated attributes
@@ -370,6 +397,20 @@ TVM_REGISTER_TARGET_KIND("cuda", kDLCUDA)
     .set_default_keys({"cuda", "gpu"})
     .set_target_canonicalizer(UpdateCUDAAttrs);
 
+TVM_REGISTER_TARGET_KIND("musa", kDLExtDev)
+    .add_attr_option<ffi::String>("mcpu")
+    .add_attr_option<ffi::String>("arch")
+    .add_attr_option<int64_t>("max_shared_memory_per_block")
+    .add_attr_option<int64_t>("max_threads_per_block")
+    .add_attr_option<int64_t>("thread_warp_size", refl::DefaultValue(32))
+    .add_attr_option<int64_t>("registers_per_block")
+    .add_attr_option<int64_t>("l2_cache_size_bytes")
+    .add_attr_option<int64_t>("max_num_threads", refl::DefaultValue(1024))
+    .set_default_keys({"musa", "gpu"})
+    .set_target_canonicalizer(UpdateMUSAAttrs);
+
+TVM_REGISTER_TARGET_KIND("ext_dev", kDLExtDev);
+
 TVM_REGISTER_TARGET_KIND("nvptx", kDLCUDA)
     .add_attr_option<ffi::String>("mcpu")
     .add_attr_option<ffi::String>("mtriple")
@@ -489,8 +530,6 @@ TVM_REGISTER_TARGET_KIND("hexagon", kDLHexagon)
     .add_attr_option<int64_t>("num-cores")
     .add_attr_option<int64_t>("vtcm-capacity")
     .set_default_keys({"hexagon", "cpu"});
-
-TVM_REGISTER_TARGET_KIND("ext_dev", kDLExtDev);
 
 TVM_REGISTER_TARGET_KIND("composite", kDLCPU)  // line break
     .add_attr_option<ffi::Array<Target>>(

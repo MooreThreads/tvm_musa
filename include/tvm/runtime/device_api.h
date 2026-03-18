@@ -321,6 +321,8 @@ inline const char* DLDeviceType2Str(int type) {
       return "cpu";
     case kDLCUDA:
       return "cuda";
+    case kDLExtDev:
+      return "musa";
     case kDLCUDAHost:
       return "cuda_host";
     case kDLCUDAManaged:
@@ -337,8 +339,6 @@ inline const char* DLDeviceType2Str(int type) {
       return "rocm";
     case kDLROCMHost:
       return "rocm_host";
-    case kDLExtDev:
-      return "ext_dev";
     case kDLOneAPI:
       return "oneapi";
     case kDLWebGPU:

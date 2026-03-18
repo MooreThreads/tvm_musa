@@ -21,7 +21,7 @@ import tvm_ffi
 
 import tvm
 import tvm.testing
-from tvm.target import Target
+from tvm.target import Target, musa
 
 
 def test_all_targets_device_type_verify():
@@ -172,6 +172,17 @@ def test_target_tag_override():
     assert tgt.attrs["thread_warp_size"] == 32
     # Tag name should be recorded
     assert tgt.tag == "nvidia/nvidia-a100"
+
+
+def test_target_tag_musa_m1000():
+    tgt = tvm.target.Target("mthreads/m1000")
+    assert tgt.kind.name == "musa"
+    assert tgt.attrs["arch"] == "mp_22"
+    assert tgt.attrs["max_shared_memory_per_block"] == 73728
+    assert tgt.attrs["max_threads_per_block"] == 1024
+    assert tgt.attrs["thread_warp_size"] == 128
+    assert tgt.attrs["registers_per_block"] == 262144
+    assert tgt.host.kind.name == "llvm"
 
 
 def test_list_kinds():
