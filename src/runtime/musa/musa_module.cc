@@ -78,7 +78,7 @@ class MUSAModuleNode : public ffi::ModuleObj {
   void WriteToFile(const ffi::String& file_name, const ffi::String& format) const final {
     std::string fmt = GetFileFormat(file_name, format);
     std::string meta_file = GetMetaFilePath(file_name);
-    if (fmt == "cu") {
+    if (fmt == "mu") {
       ICHECK_NE(musa_source_.length(), 0);
       SaveMetaDataToFile(meta_file, fmap_);
       SaveBinaryToFile(file_name, musa_source_);
@@ -178,6 +178,17 @@ class MUSAWrappedFunc {
     sptr_ = sptr;
     func_name_ = func_name;
     std::fill(fcache_.begin(), fcache_.end(), nullptr);
+    // Track whether this kernel uses dynamic shared memory and the last size set per device.
+    std::fill(dyn_smem_initialized_.begin(), dyn_smem_initialized_.end(), false);
+    // Track whether cluster attribute has been set per device.
+    std::fill(cluster_attr_initialized_.begin(), cluster_attr_initialized_.end(), false);
+    use_dyn_shared_memory_ = false;
+    for (const auto& tag : launch_param_tags) {
+      if (tag == launch_param::kUseDynamicSharedMemoryTag) {
+        use_dyn_shared_memory_ = true;
+        break;
+      }
+    }
     launch_param_config_.Init(num_void_args, launch_param_tags);
   }
   // invoke the function with void arguments
@@ -188,21 +199,93 @@ class MUSAWrappedFunc {
 
     if (fcache_[device_id] == nullptr) {
       fcache_[device_id] = m_->GetFunc(device_id, func_name_);
-      if (wl.dyn_shmem_size >= (48 << 10)) {
-        // Assumption: dyn_shmem_size doesn't change across different invocations of
-        // fcache_[device_id]
-        MUresult result = muFuncSetAttribute(
+    }
+
+    // If the kernel uses dynamic shared memory, we should ensure the attribute
+    // reflects the actual size needed for this launch. Some workloads vary the
+    // dynamic shared memory between invocations, in which case we cannot set it
+    // just once. Cache the last value per device to avoid redundant calls.
+    bool need_dyn_attr = use_dyn_shared_memory_ || (wl.dyn_shmem_size > 0);
+    if (need_dyn_attr) {
+      if (!dyn_smem_initialized_[device_id] || dyn_smem_last_[device_id] != wl.dyn_shmem_size) {
+        MUresult attr_set = muFuncSetAttribute(
             fcache_[device_id], MU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, wl.dyn_shmem_size);
-        if (result != MUSA_SUCCESS) {
+        if (attr_set != MUSA_SUCCESS) {
           LOG(FATAL) << "Failed to set the allowed dynamic shared memory size to "
                      << wl.dyn_shmem_size;
         }
+        dyn_smem_last_[device_id] = wl.dyn_shmem_size;
+        dyn_smem_initialized_[device_id] = true;
       }
     }
     MUstream strm = static_cast<MUstream>(TVMFFIEnvGetStream(kDLExtDev, device_id));
-    MUresult result = muLaunchKernel(fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1),
-                                     wl.grid_dim(2), wl.block_dim(0), wl.block_dim(1),
-                                     wl.block_dim(2), wl.dyn_shmem_size, strm, void_args, nullptr);
+    MUresult result;
+
+    if (wl.use_cluster_launch()) {
+      // SM90+ cluster launch
+      MUlaunchConfig config{};
+      MUlaunchAttribute attribute[2]{};
+      attribute[0].id = MU_LAUNCH_ATTRIBUTE_CLUSTER_DIMENSION;
+      attribute[0].value.clusterDim.x = wl.cluster_dim[0];
+      attribute[0].value.clusterDim.y = wl.cluster_dim[1];
+      attribute[0].value.clusterDim.z = wl.cluster_dim[2];
+      attribute[1].id = MU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION;
+      attribute[1].value.programmaticStreamSerializationAllowed = 1;
+
+      config.attrs = attribute;
+      config.numAttrs = 2;
+      config.hStream = strm;
+      config.gridDimX = wl.grid_dim(0);
+      config.gridDimY = wl.grid_dim(1);
+      config.gridDimZ = wl.grid_dim(2);
+      config.blockDimX = wl.block_dim(0);
+      config.blockDimY = wl.block_dim(1);
+      config.blockDimZ = wl.block_dim(2);
+      config.sharedMemBytes = wl.dyn_shmem_size;
+
+      // Set non-portable cluster size allowed attribute
+      if (!cluster_attr_initialized_[device_id]) {
+        MUresult attr_result = muFuncSetAttribute(
+            fcache_[device_id], MU_FUNC_ATTRIBUTE_NON_PORTABLE_CLUSTER_SIZE_ALLOWED, 1);
+        if (attr_result != MUSA_SUCCESS) {
+          const char* msg;
+          muGetErrorName(attr_result, &msg);
+          LOG(FATAL) << "Failed to set cluster attribute for " << func_name_ << ": " << msg;
+        }
+        cluster_attr_initialized_[device_id] = true;
+      }
+
+      result = muLaunchKernelEx(&config, fcache_[device_id], void_args, nullptr);
+    } else if (launch_param_config_.use_programtic_dependent_launch()) {
+      MUlaunchConfig config{};
+      MUlaunchAttribute attribute[1]{};
+      attribute[0].id = MU_LAUNCH_ATTRIBUTE_PROGRAMMATIC_STREAM_SERIALIZATION;
+      attribute[0].value.programmaticStreamSerializationAllowed = 1;
+
+      config.attrs = attribute;
+      config.numAttrs = 1;
+      config.hStream = strm;
+      config.gridDimX = wl.grid_dim(0);
+      config.gridDimY = wl.grid_dim(1);
+      config.gridDimZ = wl.grid_dim(2);
+      config.blockDimX = wl.block_dim(0);
+      config.blockDimY = wl.block_dim(1);
+      config.blockDimZ = wl.block_dim(2);
+      config.sharedMemBytes = wl.dyn_shmem_size;
+
+      result = muLaunchKernelEx(&config, fcache_[device_id], void_args, nullptr);
+    } else if (launch_param_config_.use_cooperative_launch()) {
+      result = static_cast<MUresult>(
+          musaLaunchCooperativeKernel(reinterpret_cast<const void*>(fcache_[device_id]),
+                                      dim3(wl.grid_dim(0), wl.grid_dim(1), wl.grid_dim(2)),
+                                      dim3(wl.block_dim(0), wl.block_dim(1), wl.block_dim(2)),
+                                      void_args, wl.dyn_shmem_size, strm));
+    } else {
+      result = muLaunchKernel(fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1), wl.grid_dim(2),
+                              wl.block_dim(0), wl.block_dim(1), wl.block_dim(2), wl.dyn_shmem_size,
+                              strm, void_args, nullptr);
+    }
+
     if (result != MUSA_SUCCESS && result != MUSA_ERROR_DEINITIALIZED) {
       const char* msg;
       muGetErrorName(result, &msg);
@@ -210,7 +293,8 @@ class MUSAWrappedFunc {
       os << "MUSALaunch Error: " << msg << "\n"
          << " grid=(" << wl.grid_dim(0) << "," << wl.grid_dim(1) << "," << wl.grid_dim(2) << "), "
          << " block=(" << wl.block_dim(0) << "," << wl.block_dim(1) << "," << wl.block_dim(2)
-         << ")\n";
+         << ")"
+         << " dyn_smem_bytes=" << wl.dyn_shmem_size;
       std::string musa = m_->InspectSource("");
       if (musa.length() != 0) {
         os << "// func_name=" << func_name_ << "\n"
@@ -234,6 +318,15 @@ class MUSAWrappedFunc {
   mutable std::array<MUfunction, kMaxNumGPUs> fcache_;
   // launch parameters configuration
   LaunchParamConfig launch_param_config_;
+  // Whether this kernel uses dynamic shared memory
+  bool use_dyn_shared_memory_{false};
+  // Cached last dynamic shared memory size per device and whether it's initialized
+  mutable std::array<size_t, kMaxNumGPUs> dyn_smem_last_;
+  mutable std::array<bool, kMaxNumGPUs> dyn_smem_initialized_;
+  // Whether cluster attribute has been initialized per device
+  mutable std::array<bool, kMaxNumGPUs> cluster_attr_initialized_;
+  // have pdl setting
+  bool has_programmatic_dependent_launch_;
 };
 
 class MUSAPrepGlobalBarrier {
