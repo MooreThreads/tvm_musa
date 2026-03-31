@@ -179,6 +179,7 @@ cscope*
 perf
 .bash_history
 *.json
+!/scripts/*.json
 *.params
 *.ro
 *.onnx
