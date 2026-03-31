@@ -1,0 +1,13 @@
+
+{
+  "gitmodule_updates": {
+    "3rdparty/dmlc-core": "https://github.com/dmlc/dmlc-core.git",
+    "3rdparty/rang": "https://github.com/agauniyal/rang.git",
+    "3rdparty/tvm-ffi": "https://github.com/MooreThreads/tvm-ffi.git"
+  },
+  "gitmodule_refs": {
+    "3rdparty/tvm-ffi": "cad601ae995b68021e7685dc381c9bad43c68743"
+  },
+  "remove_paths": [
+  ]
+}
