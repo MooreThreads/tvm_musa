@@ -30,6 +30,7 @@
 #include <tvm/ffi/reflection/registry.h>
 
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -43,6 +44,17 @@
 
 namespace tvm {
 namespace runtime {
+
+namespace {
+
+std::atomic<bool>& MUSAProcessShutdownFlag() {
+  // Leak the flag intentionally so it remains valid even during late process
+  // teardown when module destructors may still run.
+  static auto* flag = new std::atomic<bool>(false);
+  return *flag;
+}
+
+}  // namespace
 
 // Module to support thread-safe multi-GPU execution.
 // muModule is a per-GPU module
@@ -58,6 +70,9 @@ class MUSAModuleNode : public ffi::ModuleObj {
   }
   // destructor
   ~MUSAModuleNode() {
+    if (MUSAProcessShutdownFlag().load(std::memory_order_relaxed)) {
+      return;
+    }
     for (size_t i = 0; i < module_.size(); ++i) {
       if (module_[i] != nullptr) {
         MUSA_CALL(musaSetDevice(static_cast<int>(i)));
@@ -401,6 +416,9 @@ ffi::Module MUSAModuleLoadFromBytes(const ffi::Bytes& bytes) {
 TVM_FFI_STATIC_INIT_BLOCK() {
   namespace refl = tvm::ffi::reflection;
   refl::GlobalDef()
+      .def("runtime.musa.mark_shutdown", []() {
+        MUSAProcessShutdownFlag().store(true, std::memory_order_relaxed);
+      })
       .def("ffi.Module.load_from_file.musa", MUSAModuleLoadFile)
       .def("ffi.Module.load_from_bytes.musa", MUSAModuleLoadFromBytes);
 }
