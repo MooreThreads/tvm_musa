@@ -319,6 +319,22 @@ class MUSAWrappedFunc {
       }
       LOG(FATAL) << os.str();
     }
+
+    // Check for asynchronous MUSA errors that muLaunchKernel's return value
+    // does not capture (e.g. illegal memory access during kernel execution).
+    // This mirrors the CUDA FFI backend and Cython backend's
+    // TILELANG_CHECK_LAST_ERROR behavior.
+    if (result == MUSA_SUCCESS) {
+      musaError_t last_err = musaPeekAtLastError();
+      if (last_err != musaSuccess) {
+        const char* err_name = musaGetErrorName(last_err);
+        const char* err_str = musaGetErrorString(last_err);
+        // Clear the sticky error so subsequent MUSA calls are not poisoned.
+        musaGetLastError();
+        LOG(FATAL) << func_name_ << ": " << (err_name ? err_name : "unknown") << " - "
+                   << err_str;
+      }
+    }
   }
 
  private:
