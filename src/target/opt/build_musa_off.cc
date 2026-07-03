@@ -26,8 +26,7 @@ namespace tvm {
 namespace runtime {
 
 ffi::Module MUSAModuleCreate(std::string data, std::string fmt,
-                             std::unordered_map<std::string, FunctionInfo> fmap,
-                             std::string musa_source) {
+                             ffi::Map<ffi::String, FunctionInfo> fmap, std::string musa_source) {
   LOG(FATAL) << "MUSA is not enabled";
   TVM_FFI_UNREACHABLE();
 }

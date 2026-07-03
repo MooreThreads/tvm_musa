@@ -24,20 +24,21 @@
 
 #include <musa.h>
 #include <musa_runtime.h>
-#include <dmlc/memory_io.h>
+#include <tvm/ffi/cast.h>
 #include <tvm/ffi/extra/c_env_api.h>
 #include <tvm/ffi/function.h>
 #include <tvm/ffi/reflection/registry.h>
+#include <tvm/runtime/logging.h>
 
 #include <array>
 #include <atomic>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "../../support/bytes_io.h"
 #include "../file_utils.h"
-#include "../meta_data.h"
+#include "../metadata.h"
 #include "../pack_args.h"
 #include "../thread_storage_scope.h"
 #include "musa_common.h"
@@ -46,6 +47,9 @@ namespace tvm {
 namespace runtime {
 
 namespace {
+
+constexpr const char* kMUSAGlobalBarrierState = "__tvm_global_barrier_state";
+constexpr const char* kMUSAPrepareGlobalBarrier = "__tvm_prepare_global_barrier";
 
 std::atomic<bool>& MUSAProcessShutdownFlag() {
   // Leak the flag intentionally so it remains valid even during late process
@@ -62,10 +66,10 @@ std::atomic<bool>& MUSAProcessShutdownFlag() {
 // The modules will be lazily loaded
 class MUSAModuleNode : public ffi::ModuleObj {
  public:
-  explicit MUSAModuleNode(std::string data, std::string fmt,
-                          std::unordered_map<std::string, FunctionInfo> fmap,
-                          std::string musa_source)
-      : data_(data), fmt_(fmt), fmap_(fmap), musa_source_(musa_source) {
+  explicit MUSAModuleNode(ffi::Bytes data, ffi::String fmt,
+                          ffi::Map<ffi::String, FunctionInfo> fmap,
+                          ffi::Map<ffi::String, ffi::String> source)
+      : data_(data), fmt_(fmt), fmap_(fmap), source_(source) {
     std::fill(module_.begin(), module_.end(), nullptr);
   }
   // destructor
@@ -94,34 +98,42 @@ class MUSAModuleNode : public ffi::ModuleObj {
     std::string fmt = GetFileFormat(file_name, format);
     std::string meta_file = GetMetaFilePath(file_name);
     if (fmt == "mu") {
-      ICHECK_NE(musa_source_.length(), 0);
+      auto it = source_.find("musa");
+      TVM_FFI_ICHECK(it != source_.end());
       SaveMetaDataToFile(meta_file, fmap_);
-      SaveBinaryToFile(file_name, musa_source_);
+      SaveBinaryToFile(file_name, std::string((*it).second));
     } else {
-      ICHECK_EQ(fmt, fmt_) << "Can only save to format=" << fmt_;
+      TVM_FFI_ICHECK_EQ(fmt, fmt_) << "Can only save to format=" << fmt_;
       SaveMetaDataToFile(meta_file, fmap_);
-      SaveBinaryToFile(file_name, data_);
+      SaveBinaryToFile(file_name, std::string(data_.data(), data_.size()));
     }
   }
 
   ffi::Bytes SaveToBytes() const final {
     std::string buffer;
-    dmlc::MemoryStringStream ms(&buffer);
-    dmlc::Stream* stream = &ms;
-    stream->Write(fmt_);
-    stream->Write(fmap_);
-    stream->Write(data_);
-    return ffi::Bytes(buffer);
+    support::BytesOutStream stream(&buffer);
+    stream.Write(fmt_);
+    stream.Write(fmap_);
+    stream.Write(data_);
+    return ffi::Bytes(std::move(buffer));
   }
 
   ffi::String InspectSource(const ffi::String& format) const final {
-    if (format == fmt_) return data_;
-    if (musa_source_.length() != 0) {
-      return musa_source_;
-    } else {
-      if (fmt_ == "ptx") return data_;
-      return "";
+    if (format == fmt_) {
+      return ffi::String(data_.data(), data_.size());
     }
+    if (auto it = source_.find(format); it != source_.end()) {
+      return (*it).second;
+    }
+    if (format.empty()) {
+      if (auto it = source_.find("musa"); it != source_.end()) {
+        return (*it).second;
+      }
+    }
+    if (fmt_ == "ptx") {
+      return ffi::String(data_.data(), data_.size());
+    }
+    return "";
   }
 
   // get a MUfunction from primary context in device_id
@@ -129,7 +141,7 @@ class MUSAModuleNode : public ffi::ModuleObj {
     std::lock_guard<std::mutex> lock(mutex_);
     // must recheck under the lock scope
     if (module_[device_id] == nullptr) {
-      MUSA_DRIVER_CALL(muModuleLoadData(&(module_[device_id]), data_.c_str()));
+      MUSA_DRIVER_CALL(muModuleLoadData(&(module_[device_id]), data_.data()));
       static auto nvshmem_init_hook = ffi::Function::GetGlobal("runtime.nvshmem.mumodule_init");
       if (nvshmem_init_hook.has_value()) {
         (*nvshmem_init_hook)(static_cast<void*>(module_[device_id]));
@@ -149,7 +161,7 @@ class MUSAModuleNode : public ffi::ModuleObj {
     std::lock_guard<std::mutex> lock(mutex_);
     // must recheck under the lock scope
     if (module_[device_id] == nullptr) {
-      MUSA_DRIVER_CALL(muModuleLoadData(&(module_[device_id]), data_.c_str()));
+      MUSA_DRIVER_CALL(muModuleLoadData(&(module_[device_id]), data_.data()));
       static auto nvshmem_init_hook = ffi::Function::GetGlobal("runtime.nvshmem.mumodule_init");
       if (nvshmem_init_hook.has_value()) {
         (*nvshmem_init_hook)(static_cast<void*>(module_[device_id]));
@@ -159,7 +171,7 @@ class MUSAModuleNode : public ffi::ModuleObj {
     size_t nbytes;
 
     MUresult result = muModuleGetGlobal(&global, &nbytes, module_[device_id], global_name.c_str());
-    ICHECK_EQ(nbytes, expect_nbytes);
+    TVM_FFI_ICHECK_EQ(nbytes, expect_nbytes);
     if (result != MUSA_SUCCESS) {
       const char* msg;
       muGetErrorName(result, &msg);
@@ -170,13 +182,13 @@ class MUSAModuleNode : public ffi::ModuleObj {
 
  private:
   // the binary data
-  std::string data_;
+  ffi::Bytes data_;
   // The format
-  std::string fmt_;
+  ffi::String fmt_;
   // function information table.
-  std::unordered_map<std::string, FunctionInfo> fmap_;
-  // The musa source.
-  std::string musa_source_;
+  ffi::Map<ffi::String, FunctionInfo> fmap_;
+  // Optional source map for inspection.
+  ffi::Map<ffi::String, ffi::String> source_;
   // the internal modules per GPU, to be lazily initialized.
   std::array<MUmodule, kMaxNumGPUs> module_;
   // internal mutex when updating the module
@@ -187,8 +199,8 @@ class MUSAModuleNode : public ffi::ModuleObj {
 class MUSAWrappedFunc {
  public:
   // initialize the MUSA function.
-  void Init(MUSAModuleNode* m, ObjectPtr<Object> sptr, const std::string& func_name,
-            size_t num_void_args, const std::vector<std::string>& launch_param_tags) {
+  void Init(MUSAModuleNode* m, ffi::ObjectPtr<ffi::Object> sptr, const std::string& func_name,
+            size_t num_void_args, const ffi::Array<ffi::String>& launch_param_tags) {
     m_ = m;
     sptr_ = sptr;
     func_name_ = func_name;
@@ -341,7 +353,7 @@ class MUSAWrappedFunc {
   // internal module
   MUSAModuleNode* m_;
   // the resource holder
-  ObjectPtr<Object> sptr_;
+  ffi::ObjectPtr<ffi::Object> sptr_;
   // The name of the function.
   std::string func_name_;
   // Device function cache per device.
@@ -362,7 +374,7 @@ class MUSAWrappedFunc {
 
 class MUSAPrepGlobalBarrier {
  public:
-  MUSAPrepGlobalBarrier(MUSAModuleNode* m, ObjectPtr<Object> sptr) : m_(m), sptr_(sptr) {
+  MUSAPrepGlobalBarrier(MUSAModuleNode* m, ffi::ObjectPtr<ffi::Object> sptr) : m_(m), sptr_(sptr) {
     std::fill(pcache_.begin(), pcache_.end(), 0);
   }
 
@@ -371,7 +383,7 @@ class MUSAPrepGlobalBarrier {
     MUSA_CALL(musaGetDevice(&device_id));
     if (pcache_[device_id] == 0) {
       pcache_[device_id] =
-          m_->GetGlobal(device_id, runtime::symbol::tvm_global_barrier_state, sizeof(unsigned));
+          m_->GetGlobal(device_id, kMUSAGlobalBarrierState, sizeof(unsigned));
     }
     MUSA_DRIVER_CALL(muMemsetD32(pcache_[device_id], 0, 1));
   }
@@ -380,36 +392,40 @@ class MUSAPrepGlobalBarrier {
   // internal module
   MUSAModuleNode* m_;
   // the resource holder
-  ObjectPtr<Object> sptr_;
+  ffi::ObjectPtr<ffi::Object> sptr_;
   // mark as mutable, to enable lazy initialization
   mutable std::array<MUdeviceptr, kMaxNumGPUs> pcache_;
 };
 
 ffi::Optional<ffi::Function> MUSAModuleNode::GetFunction(const ffi::String& name) {
-  ObjectPtr<Object> sptr_to_self = ffi::GetObjectPtr<Object>(this);
-  ICHECK_EQ(sptr_to_self.get(), this);
-  if (name == symbol::tvm_prepare_global_barrier) {
+  ffi::ObjectPtr<ffi::Object> sptr_to_self = ffi::GetObjectPtr<ffi::Object>(this);
+  TVM_FFI_ICHECK_EQ(sptr_to_self.get(), this);
+  if (name == kMUSAPrepareGlobalBarrier) {
     return ffi::Function(MUSAPrepGlobalBarrier(this, sptr_to_self));
   }
-  auto it = fmap_.find(name);
-  if (it == fmap_.end()) return ffi::Function();
-  const FunctionInfo& info = it->second;
+  auto opt_info = fmap_.Get(name);
+  if (!opt_info.has_value()) return ffi::Function();
+  FunctionInfo info = opt_info.value();
   MUSAWrappedFunc f;
-  f.Init(this, sptr_to_self, name, info.arg_types.size(), info.launch_param_tags);
-  return PackFuncVoidAddr(f, info.arg_types, info.arg_extra_tags);
+  f.Init(this, sptr_to_self, name, info->arg_types.size(), info->launch_param_tags);
+  return PackFuncVoidAddr(f, info->arg_types, info->arg_extra_tags);
 }
 
 ffi::Module MUSAModuleCreate(std::string data, std::string fmt,
-                             std::unordered_map<std::string, FunctionInfo> fmap,
-                             std::string musa_source) {
-  auto n = ffi::make_object<MUSAModuleNode>(data, fmt, fmap, musa_source);
+                             ffi::Map<ffi::String, FunctionInfo> fmap, std::string musa_source) {
+  ffi::Map<ffi::String, ffi::String> source;
+  if (!musa_source.empty()) {
+    source.Set("musa", ffi::String(musa_source));
+  }
+  auto n = ffi::make_object<MUSAModuleNode>(ffi::Bytes(std::move(data)), ffi::String(fmt), fmap,
+                                           source);
   return ffi::Module(n);
 }
 
 // Load module from module.
 ffi::Module MUSAModuleLoadFile(const std::string& file_name, const ffi::String& format) {
   std::string data;
-  std::unordered_map<std::string, FunctionInfo> fmap;
+  ffi::Map<ffi::String, FunctionInfo> fmap;
   std::string fmt = GetFileFormat(file_name, format);
   std::string meta_file = GetMetaFilePath(file_name);
   LoadBinaryFromFile(file_name, &data);
@@ -418,15 +434,16 @@ ffi::Module MUSAModuleLoadFile(const std::string& file_name, const ffi::String& 
 }
 
 ffi::Module MUSAModuleLoadFromBytes(const ffi::Bytes& bytes) {
-  dmlc::MemoryFixedSizeStream ms(const_cast<char*>(bytes.data()), bytes.size());
-  dmlc::Stream* stream = &ms;
-  std::string data;
-  std::unordered_map<std::string, FunctionInfo> fmap;
-  std::string fmt;
-  stream->Read(&fmt);
-  stream->Read(&fmap);
-  stream->Read(&data);
-  return MUSAModuleCreate(data, fmt, fmap, std::string());
+  support::BytesInStream stream(bytes);
+  ffi::String fmt;
+  ffi::Map<ffi::String, FunctionInfo> fmap;
+  ffi::Bytes data;
+  stream.Read(&fmt);
+  TVM_FFI_ICHECK(stream.Read(&fmap));
+  stream.Read(&data);
+  auto n = ffi::make_object<MUSAModuleNode>(std::move(data), std::move(fmt), std::move(fmap),
+                                           ffi::Map<ffi::String, ffi::String>());
+  return ffi::Module(n);
 }
 
 TVM_FFI_STATIC_INIT_BLOCK() {

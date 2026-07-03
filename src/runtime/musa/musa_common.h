@@ -47,7 +47,7 @@ namespace runtime {
 #define MUSA_CALL(func)                                       \
   {                                                           \
     musaError_t e = (func);                                   \
-    ICHECK(e == musaSuccess || e == musaErrorMusartUnloading) \
+    TVM_FFI_ICHECK(e == musaSuccess || e == musaErrorMusartUnloading) \
         << "MUSA: " << musaGetErrorString(e);                 \
   }
 

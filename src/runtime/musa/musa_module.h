@@ -31,7 +31,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../meta_data.h"
+#include "../metadata.h"
 
 namespace tvm {
 namespace runtime {
@@ -48,8 +48,7 @@ static constexpr const int kMaxNumGPUs = 32;
  * \param musa_source Optional, musa source file
  */
 ffi::Module MUSAModuleCreate(std::string data, std::string fmt,
-                             std::unordered_map<std::string, FunctionInfo> fmap,
-                             std::string musa_source);
+                             ffi::Map<ffi::String, FunctionInfo> fmap, std::string musa_source);
 }  // namespace runtime
 }  // namespace tvm
 #endif  // TVM_RUNTIME_MUSA_MUSA_MODULE_H_

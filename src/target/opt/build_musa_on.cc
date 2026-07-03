@@ -24,6 +24,7 @@
  * \file build_cuda.cc
  */
 #include "tvm/ffi/extra/module.h"
+#include <tvm/runtime/logging.h>
 #if defined(__linux__)
 #include <sys/stat.h>
 #include <tvm/ffi/reflection/registry.h>
@@ -58,7 +59,7 @@ std::string MTCompile(const std::string& code, const Target& target) {
   std::filesystem::path base_dir(runtime::GetCacheDir());
   std::error_code dir_err;
   std::filesystem::create_directories(base_dir, dir_err);
-  ICHECK(!dir_err) << "MTCompile: cannot create cache directory " << base_dir.string() << ": "
+  TVM_FFI_ICHECK(!dir_err) << "MTCompile: cannot create cache directory " << base_dir.string() << ": "
                    << dir_err.message();
 
   std::ostringstream name;
@@ -69,10 +70,10 @@ std::string MTCompile(const std::string& code, const Target& target) {
 
   {
     std::ofstream ofs(source_path, std::ios::out | std::ios::trunc);
-    ICHECK(ofs.good()) << "MTCompile: cannot open temp source file " << source_path;
+    TVM_FFI_ICHECK(ofs.good()) << "MTCompile: cannot open temp source file " << source_path;
     ofs << code;
     ofs.close();
-    ICHECK(!ofs.fail()) << "MTCompile: failed to flush source file " << source_path;
+    TVM_FFI_ICHECK(!ofs.fail()) << "MTCompile: failed to flush source file " << source_path;
   }
 
   const char* compiler_env = std::getenv("TVM_MUSA_COMPILER");
@@ -107,7 +108,7 @@ std::string MTCompile(const std::string& code, const Target& target) {
 
   std::string err_msg;
   int ret_code = support::Execute(cmd_builder.str(), &err_msg);
-  ICHECK_EQ(ret_code, 0) << "MTCompile failed (code " << ret_code << ")\n"
+  TVM_FFI_ICHECK_EQ(ret_code, 0) << "MTCompile failed (code " << ret_code << ")\n"
                          << "Command: " << cmd_builder.str() << "\n"
                          << err_msg;
 
@@ -131,11 +132,11 @@ ffi::Module BuildMUSA(IRModule mod, Target target) {
 
   ffi::Map<GlobalVar, PrimFunc> functions;
   for (auto [gvar, base_func] : mod->functions) {
-    ICHECK(base_func->IsInstance<PrimFuncNode>()) << "CodeGenMUSA: Can only take PrimFunc";
+    TVM_FFI_ICHECK(base_func->IsInstance<PrimFuncNode>()) << "CodeGenMUSA: Can only take PrimFunc";
     auto prim_func = Downcast<PrimFunc>(base_func);
     auto calling_conv =
         prim_func->GetAttr<Integer>(tvm::attr::kCallingConv, Integer(tvm::CallingConv::kDefault));
-    ICHECK(calling_conv == CallingConv::kDeviceKernelLaunch ||
+    TVM_FFI_ICHECK(calling_conv == CallingConv::kDeviceKernelLaunch ||
            calling_conv == CallingConv::kDefault)
         << "CodeGenMUSA: expect calling_conv equals CallingConv::kDeviceKernelLaunch or "
            "CallingConv::kDefault";

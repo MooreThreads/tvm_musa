@@ -23,12 +23,12 @@
  */
 #include <musa.h>
 #include <musa_runtime.h>
-#include <dmlc/thread_local.h>
 #include <tvm/ffi/extra/c_env_api.h>
 #include <tvm/ffi/function.h>
 #include <tvm/ffi/reflection/registry.h>
 #include <tvm/runtime/device_api.h>
-#include <tvm/runtime/profiling.h>
+#include <tvm/runtime/logging.h>
+#include <tvm/runtime/timer.h>
 
 #include <cstring>
 
@@ -135,7 +135,7 @@ class MUSADeviceAPI final : public DeviceAPI {
     *rv = value;
   }
   void* AllocDataSpace(Device dev, size_t nbytes, size_t alignment, DLDataType type_hint) final {
-    ICHECK_EQ(256 % alignment, 0U) << "MUSA space is aligned at 256 bytes";
+    TVM_FFI_ICHECK_EQ(256 % alignment, 0U) << "MUSA space is aligned at 256 bytes";
     void* ret;
     MUSA_CALL(musaSetDevice(dev.device_id));
     size_t free_mem, total_mem;
@@ -257,11 +257,12 @@ class MUSADeviceAPI final : public DeviceAPI {
   }
 };
 
-typedef dmlc::ThreadLocalStore<MUSAThreadEntry> MUSAThreadStore;
-
 MUSAThreadEntry::MUSAThreadEntry() : pool(kDLExtDev, MUSADeviceAPI::Global()) {}
 
-MUSAThreadEntry* MUSAThreadEntry::ThreadLocal() { return MUSAThreadStore::Get(); }
+MUSAThreadEntry* MUSAThreadEntry::ThreadLocal() {
+  static thread_local MUSAThreadEntry inst;
+  return &inst;
+}
 
 TVM_FFI_STATIC_INIT_BLOCK() {
   namespace refl = tvm::ffi::reflection;
