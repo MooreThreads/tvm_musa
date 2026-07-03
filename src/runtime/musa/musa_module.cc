@@ -314,14 +314,31 @@ class MUSAWrappedFunc {
     }
 
     if (result != MUSA_SUCCESS && result != MUSA_ERROR_DEINITIALIZED) {
-      const char* msg;
+      const char* msg = nullptr;
       muGetErrorName(result, &msg);
       std::ostringstream os;
-      os << "MUSALaunch Error: " << msg << "\n"
+      os << "MUSALaunch Error: " << (msg ? msg : "unknown")
+         << " (code=" << static_cast<int>(result) << ")\n"
          << " grid=(" << wl.grid_dim(0) << "," << wl.grid_dim(1) << "," << wl.grid_dim(2) << "), "
          << " block=(" << wl.block_dim(0) << "," << wl.block_dim(1) << "," << wl.block_dim(2)
          << ")"
          << " dyn_smem_bytes=" << wl.dyn_shmem_size;
+      auto append_func_attr = [&](MUfunction_attribute attr, const char* name) {
+        int value = 0;
+        MUresult attr_result = muFuncGetAttribute(&value, attr, fcache_[device_id]);
+        os << "\n " << name << "=";
+        if (attr_result == MUSA_SUCCESS) {
+          os << value;
+        } else {
+          os << "unavailable(code=" << static_cast<int>(attr_result) << ")";
+        }
+      };
+      append_func_attr(MU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, "max_threads_per_block");
+      append_func_attr(MU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, "static_smem_bytes");
+      append_func_attr(MU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES, "const_bytes");
+      append_func_attr(MU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES, "local_bytes");
+      append_func_attr(MU_FUNC_ATTRIBUTE_NUM_REGS, "num_regs");
+      append_func_attr(MU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, "max_dynamic_smem_bytes");
       std::string musa = m_->InspectSource("");
       if (musa.length() != 0) {
         os << "// func_name=" << func_name_ << "\n"

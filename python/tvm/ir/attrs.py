@@ -83,6 +83,8 @@ class DictAttrs(Attrs):
         """Get internal dict"""
         return _ffi_api.DictAttrsGetDict(self)
 
+    __dict__ = property(_dict)
+
     def keys(self):
         """Get list of names in the attribute.
 
