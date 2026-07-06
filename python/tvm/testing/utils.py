@@ -536,6 +536,13 @@ class Feature:
 
         If None, defaults to the short name.
 
+    cmake_flag: Optional[str]
+
+        The flag that must be enabled in the config.cmake in order to
+        use this feature.
+
+        If None, this feature does not require a specific CMake flag.
+
     target_kind_enabled: Optional[str]
 
         The target kind that must be enabled to run tests using this
@@ -599,6 +606,7 @@ class Feature:
         self,
         name: str,
         long_name: str | None = None,
+        cmake_flag: str | None = None,
         target_kind_enabled: str | None = None,
         compile_time_check: Callable[[], bool | str] | None = None,
         target_kind_hardware: str | None = None,
@@ -607,6 +615,7 @@ class Feature:
     ):
         self.name = name
         self.long_name = long_name or name
+        self.cmake_flag = cmake_flag
         self.target_kind_enabled = target_kind_enabled
         self.compile_time_check = compile_time_check
         self.target_kind_hardware = target_kind_hardware
@@ -654,6 +663,15 @@ class Feature:
                 reason=(
                     f"{self.target_kind_enabled} tests disabled "
                     f"by TVM_TEST_TARGETS environment variable"
+                ),
+            )
+
+        if self.cmake_flag is not None:
+            yield pytest.mark.skipif(
+                not _cmake_flag_enabled(self.cmake_flag),
+                reason=(
+                    f"{self.long_name} support not enabled. "
+                    f"Set {self.cmake_flag} in config.cmake to enable."
                 ),
             )
 
@@ -1090,6 +1108,11 @@ def _has_cpu_feat(features):
     has_feat = codegen.target_has_features(features, tvm.target.Target(target))
 
     return has_feat
+
+
+def _cmake_flag_enabled(flag):
+    flag = tvm.support.libinfo()[flag]
+    return flag.lower() not in ["off", "false", "0"]
 
 
 requires_arm_dot = Feature(
