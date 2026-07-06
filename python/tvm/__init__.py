@@ -18,6 +18,7 @@
 # pylint: disable=redefined-builtin, wildcard-import
 """TVM: Open Deep Learning Compiler Stack."""
 
+import atexit
 import multiprocessing
 import sys
 import os
@@ -77,6 +78,15 @@ from .contrib import rocm as _rocm, nvcc as _nvcc
 if not _RUNTIME_ONLY:
     # tvm.relax — registers itself via tvm.script.register_dialect in its __init__
     from . import relax
+
+
+def _mark_musa_shutdown():
+    mark_shutdown = get_global_func("runtime.musa.mark_shutdown", allow_missing=True)
+    if mark_shutdown is not None:
+        mark_shutdown()
+
+
+atexit.register(_mark_musa_shutdown)
 
 # NOTE: This file should be python2 compatible so we can
 # raise proper error message when user run the package using
