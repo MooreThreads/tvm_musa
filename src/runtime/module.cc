@@ -40,6 +40,8 @@ bool RuntimeEnabled(const ffi::String& target_str) {
   std::string f_name;
   if (target == "cpu") {
     return true;
+  } else if (target == "musa") {
+    f_name = "device_api.musa";
   } else if (target == "cuda" || target == "gpu") {
     f_name = "device_api.cuda";
   } else if (target == "cl" || target == "opencl") {

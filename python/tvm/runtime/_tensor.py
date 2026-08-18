@@ -385,6 +385,22 @@ def cuda(dev_id=0):
     return device(DLDeviceType.kDLCUDA, dev_id)
 
 
+def musa(dev_id=0):
+    """Construct a MUSA GPU device
+
+    Parameters
+    ----------
+    dev_id : int, optional
+        The integer device id
+
+    Returns
+    -------
+    dev : Device
+        The created device
+    """
+    return device(DLDeviceType.kDLExtDev, dev_id)
+
+
 def rocm(dev_id=0):
     """Construct a ROCM device
 
