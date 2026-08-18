@@ -28,6 +28,7 @@ from . import aws_cpu
 from . import metal
 from . import hexagon
 from . import adreno
+from . import musa
 
 # Validate all tags at import time
 registry.list_tags()

@@ -160,6 +160,16 @@ def test_target_tag_1():
     assert tgt.attrs["registers_per_block"] == 32768
 
 
+def test_target_tag_musa_mp31():
+    tgt = tvm.target.Target("mthreads/mp31")
+    assert tgt.kind.name == "musa"
+    assert tgt.attrs["arch"] == "mp_31"
+    assert tgt.attrs["max_shared_memory_per_block"] == 98304
+    assert tgt.attrs["max_threads_per_block"] == 1024
+    assert tgt.attrs["thread_warp_size"] == 32
+    assert tgt.attrs["registers_per_block"] == 262144
+
+
 def test_target_tag_override():
     """Test creating a target from a tag with attribute overrides."""
     tgt = tvm.target.Target({"tag": "nvidia/nvidia-a100", "l2_cache_size_bytes": 12345})

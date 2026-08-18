@@ -338,7 +338,7 @@ inline const char* DLDeviceType2Str(int type) {
     case kDLROCMHost:
       return "rocm_host";
     case kDLExtDev:
-      return "ext_dev";
+      return "musa";
     case kDLOneAPI:
       return "oneapi";
     case kDLWebGPU:
