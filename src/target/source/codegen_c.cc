@@ -507,7 +507,7 @@ void CodeGenC::VisitExpr_(const FloatImmNode* op, std::ostream& os) {  // NOLINT
   PrintConst(op, os, this);
 }
 void CodeGenC::VisitExpr_(const StringImmNode* op, std::ostream& os) {  // NOLINT(*)
-  os << EscapeString(op->value);
+  os << EscapeStringJSON(op->value);
 }
 
 template <typename T>
