@@ -44,6 +44,7 @@ tvm_option(USE_KHRONOS_SPIRV "Whether to use spirv-tools and SPIRV-Headers from 
 tvm_option(USE_SPIRV_KHR_INTEGER_DOT_PRODUCT "whether enable SPIRV_KHR_DOT_PRODUCT" OFF)
 tvm_option(USE_METAL "Build with Metal" OFF)
 tvm_option(USE_ROCM "Build with ROCM" OFF)
+tvm_option(USE_MUSA "Build with MUSA" OFF)
 tvm_option(USE_RCCL "Build with RCCL" OFF)
 tvm_option(ROCM_PATH "The path to rocm" /opt/rocm)
 tvm_option(USE_HEXAGON "Build with Hexagon support" OFF)
@@ -309,6 +310,7 @@ tvm_file_glob(GLOB CODEGEN_SRCS
   src/target/canonicalizer/*.cc
   src/target/canonicalizer/llvm/*.cc
   src/target/cuda/*.cc
+  src/target/musa/*.cc
   src/target/rocm/*.cc
   src/target/hexagon/*.cc
   src/target/metal/*.cc
@@ -455,6 +457,7 @@ include(cmake/modules/OpenMP.cmake)
 include(cmake/modules/Vulkan.cmake)
 include(cmake/modules/Metal.cmake)
 include(cmake/modules/ROCM.cmake)
+include(cmake/modules/MUSA.cmake)
 include(cmake/modules/LLVM.cmake)
 include(cmake/modules/contrib/BLAS.cmake)
 include(cmake/modules/contrib/DNNL.cmake)
