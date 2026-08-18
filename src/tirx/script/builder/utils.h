@@ -78,7 +78,6 @@ inline PrimFuncFrame FindPrimFuncFrame(const ffi::String& method) {
 }
 
 /*!
-/*!
  * \brief Find a PrimFuncFrame anywhere in the current builder stack (not necessarily the top).
  *        This relaxed variant enables certain APIs (e.g., T.match_buffer on a PrimFunc param)
  *        to be invoked after non-top-level frames (let/if/for) have been introduced, while
