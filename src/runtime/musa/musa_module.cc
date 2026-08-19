@@ -32,6 +32,7 @@
 #include <tvm/ffi/reflection/registry.h>
 
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -45,6 +46,12 @@
 namespace tvm {
 namespace runtime {
 namespace {
+
+std::atomic<bool>& MUSAProcessShutdownFlag() {
+  // Leak the flag intentionally so it remains valid during late process teardown.
+  static auto* flag = new std::atomic<bool>(false);
+  return *flag;
+}
 
 inline void EnsureCurrentDeviceContext(int device_id) {
   // Driver API entry points require a current context on this thread. `musaGetDevice`
@@ -70,6 +77,9 @@ class MUSAModuleNode : public ffi::ModuleObj {
   }
   // destructor
   ~MUSAModuleNode() {
+    if (MUSAProcessShutdownFlag().load(std::memory_order_relaxed)) {
+      return;
+    }
     for (size_t i = 0; i < module_.size(); ++i) {
       if (module_[i] != nullptr) {
         MUSA_CALL(musaSetDevice(static_cast<int>(i)));
@@ -457,6 +467,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
   // Registry: "ffi.Module.load_from_bytes.musa" - disk loader. Only this
   // (real) module registers a loader; the fallback module is codegen-time only.
   refl::GlobalDef()
+      .def("runtime.musa.mark_shutdown", []() {
+        MUSAProcessShutdownFlag().store(true, std::memory_order_relaxed);
+      })
       .def("ffi.Module.load_from_bytes.musa", MUSAModuleLoadFromBytes)
       .def("ffi.Module.create.musa",
            [](ffi::Bytes code, ffi::String fmt, ffi::Map<ffi::String, FunctionInfo> fmap,
