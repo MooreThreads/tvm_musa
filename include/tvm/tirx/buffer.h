@@ -105,6 +105,8 @@ class BufferNode : public ffi::Object {
   int offset_factor;
   /*! \brief buffer type */
   BufferType buffer_type;
+  /*! \brief Whether this buffer was created by the explicit alias_buffer API. */
+  bool is_explicit_alias{false};
   /*!
    * \brief Span that points to the original source code.
    *        Reserved debug information.
@@ -127,6 +129,7 @@ class BufferNode : public ffi::Object {
         .def_ro("data_alignment", &BufferNode::data_alignment)
         .def_ro("offset_factor", &BufferNode::offset_factor)
         .def_ro("buffer_type", &BufferNode::buffer_type)
+        .def_ro("is_explicit_alias", &BufferNode::is_explicit_alias)
         .def_ro("span", &BufferNode::span, refl::AttachFieldFlag::SEqHashIgnore());
   }
 
@@ -169,6 +172,8 @@ class Buffer : public ffi::ObjectRef {
    * \return The strided version of the buffer.
    */
   TVM_DLL Buffer MakeStrideView() const;
+  /*! \brief Return a copy marked as an explicit TileLang alias buffer. */
+  TVM_DLL Buffer MarkExplicitAlias() const;
   /*!
    * \brief Make a new symbolic buffer representing a slice of the buffer.
    * \param begins The beginning position of each dimension.

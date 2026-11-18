@@ -22,6 +22,7 @@
  */
 #include "musa_module.h"
 
+#include <dlfcn.h>
 #include <musa.h>
 #include <musa_runtime.h>
 #include <tvm/ffi/cast.h>
@@ -302,11 +303,28 @@ class MUSAWrappedFunc {
 
       result = muLaunchKernelEx(&config, fcache_[device_id], void_args, nullptr);
     } else if (launch_param_config_.use_cooperative_launch()) {
-      result = static_cast<MUresult>(
-          musaLaunchCooperativeKernel(reinterpret_cast<const void*>(fcache_[device_id]),
-                                      dim3(wl.grid_dim(0), wl.grid_dim(1), wl.grid_dim(2)),
-                                      dim3(wl.block_dim(0), wl.block_dim(1), wl.block_dim(2)),
-                                      void_args, wl.dyn_shmem_size, strm));
+      // MUSA 5.1 exports this driver API from libmusa but omits it from both
+      // the public declaration and the link-time stub library.
+      using LaunchCooperativeKernel = MUresult(MUSAAPI *)(
+          MUfunction, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int,
+          unsigned int, unsigned int, MUstream, void**);
+      static auto launch_cooperative_kernel = []() {
+        void* driver_handle = dlopen("libmusa.so.1", RTLD_NOW | RTLD_LOCAL);
+        if (driver_handle == nullptr) {
+          driver_handle = dlopen("libmusa.so", RTLD_NOW | RTLD_LOCAL);
+        }
+        return driver_handle == nullptr
+                   ? nullptr
+                   : reinterpret_cast<LaunchCooperativeKernel>(
+                         dlsym(driver_handle, "muLaunchCooperativeKernel"));
+      }();
+      if (launch_cooperative_kernel == nullptr) {
+        result = MUSA_ERROR_NOT_FOUND;
+      } else {
+        result = launch_cooperative_kernel(
+            fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1), wl.grid_dim(2), wl.block_dim(0),
+            wl.block_dim(1), wl.block_dim(2), wl.dyn_shmem_size, strm, void_args);
+      }
     } else {
       result = muLaunchKernel(fcache_[device_id], wl.grid_dim(0), wl.grid_dim(1), wl.grid_dim(2),
                               wl.block_dim(0), wl.block_dim(1), wl.block_dim(2), wl.dyn_shmem_size,

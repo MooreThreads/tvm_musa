@@ -49,6 +49,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       });
   // Register tfloat32 as a custom datatype with type code 130
   Registry::Global()->Register("tfloat32", 130);
+  // Preserve the public TileLang unpacked FP4 storage tag during import.
+  Registry::Global()->Register("float4_e2m1_unpacked", 131);
 }
 
 Registry* Registry::Global() {

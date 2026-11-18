@@ -484,6 +484,14 @@ Buffer Buffer::MakeStrideView() const {
   return Buffer(n);
 }
 
+Buffer Buffer::MarkExplicitAlias() const {
+  const BufferNode* self = operator->();
+  TVM_FFI_ICHECK(self != nullptr);
+  auto n = ffi::make_object<BufferNode>(*self);
+  n->is_explicit_alias = true;
+  return Buffer(n);
+}
+
 Buffer Buffer::MakeSlice(ffi::Array<PrimExpr> begins, ffi::Array<PrimExpr> extents) const {
   const BufferNode* n = operator->();
   TVM_FFI_ICHECK(n != nullptr);
@@ -512,6 +520,7 @@ Buffer Buffer::MakeSlice(ffi::Array<PrimExpr> begins, ffi::Array<PrimExpr> exten
   }
   Buffer slice(n->data, n->dtype, extents, strides, elem_offset[0], n->name + "_slice",
                n->data_alignment, 0, n->buffer_type);
+  slice.CopyOnWrite()->is_explicit_alias = n->is_explicit_alias;
 
   // Buffer must be constructed with a singular element offset which means there is no
   // support for n-dimensional buffers where n > 1.  Insert sentinel value for
@@ -665,6 +674,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                   })
       .def_method("tirx.BufferAccessPtr", &Buffer::access_ptr)
       .def_method("tirx.BufferGetFlattenedBuffer", &Buffer::GetFlattenedBuffer)
+      .def_method("tirx.BufferMarkExplicitAlias", &Buffer::MarkExplicitAlias)
       .def_method("tirx.BufferOffsetOf", &Buffer::OffsetOf)
       .def_method("tirx.BufferVLoad", &Buffer::vload)
       .def_method("tirx.BufferVStore", &Buffer::vstore)

@@ -176,6 +176,10 @@ class Buffer(Object, Scriptable):
         """
         return _ffi_api.BufferGetFlattenedBuffer(self)  # type: ignore
 
+    def mark_explicit_alias(self):
+        """Return a copy marked as originating from TileLang's explicit alias API."""
+        return _ffi_api.BufferMarkExplicitAlias(self)  # type: ignore
+
     def offset_of(self, indices):
         """Determine the offset of the provided indices in the flattened buffer.
 
